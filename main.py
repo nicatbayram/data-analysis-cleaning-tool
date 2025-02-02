@@ -4,12 +4,13 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.express as px
 import plotly.graph_objects as go
-import requests
+
 from datetime import datetime
 from io import StringIO
 import yfinance as yf
 from fpdf import FPDF
 import warnings
+warnings.filterwarnings('ignore')
 warnings.filterwarnings('ignore')
 
 class EnhancedDataCleaner:
@@ -217,40 +218,139 @@ class AdvancedDataAnalyzer:
         # Save the report
         pdf.output(filename)
         print(f"Report generated: {filename}")
+        
+   
+        
+    def filter_top_n_countries(self, column='estimate', n=10, aggregation='mean'):
+        """Filter top N countries."""
+        if self.cleaned_data is None:
+            print("Clean the data first.")
+            return
+            
+        grouped_data = (self.cleaned_data.groupby('country')[column]
+                       .agg(aggregation)
+                       .sort_values(ascending=False)
+                       .head(n))
+        return grouped_data.index.tolist()
+    
+    def create_enhanced_bar_plot(self, x_col, y_col, title, top_n=10):
+        """Improved bar chart rendering."""
+        x_col = x_col.lower()
+        y_col = y_col.lower()
+        
+        # Get top N countries
+        top_countries = self.filter_top_n_countries(y_col, top_n)
+        filtered_data = self.cleaned_data[self.cleaned_data['country'].isin(top_countries)]
+        
+        # Calculate average values ​​by country
+        plot_data = (filtered_data.groupby('country')[y_col]
+                    .mean()
+                    .sort_values(ascending=True))
+        
+        # Visualization
+        plt.figure(figsize=(12, 8))
+        bars = plt.barh(plot_data.index, plot_data.values)
+        
+        # Visual improvements
+        plt.title(title, pad=20, fontsize=14)
+        plt.xlabel(y_col.title(), fontsize=12)
+        plt.ylabel(x_col.title(), fontsize=12)
+        
+        # Add values ​​on bars
+        for bar in bars:
+            width = bar.get_width()
+            plt.text(width, bar.get_y() + bar.get_height()/2,
+                    f'{int(width):,}',
+                    ha='left', va='center', fontsize=10)
+        
+        plt.grid(axis='x', linestyle='--', alpha=0.7)
+        plt.tight_layout()
+        plt.show()
+        
+        self.log_operation(f"Created enhanced bar plot: {title} (Top {top_n} countries)")
+    
+    def create_interactive_scatter_plot(self, x_col, y_col, title, top_n=10):
+        """Create an interactive scatter plot using Plotly."""
+        x_col = x_col.lower()
+        y_col = y_col.lower()
+        
+        # Get top N countries
+        top_countries = self.filter_top_n_countries(y_col, top_n)
+        filtered_data = self.cleaned_data[self.cleaned_data['country'].isin(top_countries)]
+        
+        fig = px.scatter(filtered_data, x=x_col, y=y_col, color='country',
+                        title=title, hover_data=['country', 'year'])
+        
+        fig.update_layout(
+            title=dict(
+                text=title,
+                x=0.5,
+                xanchor='center'
+            ),
+            showlegend=True,
+            legend_title_text='Ülkeler',
+            height=600
+        )
+        
+        fig.show()
+        self.log_operation(f"Created interactive scatter plot: {title} (Top {top_n} countries)")
+    
+    def create_time_series_plot(self, y_col, title, top_n=5):
+        """Create a time series chart."""
+        y_col = y_col.lower()
+        
+        # Get top N countries
+        top_countries = self.filter_top_n_countries(y_col, top_n)
+        filtered_data = self.cleaned_data[self.cleaned_data['country'].isin(top_countries)]
+        
+        plt.figure(figsize=(12, 6))
+        
+        for country in top_countries:
+            country_data = filtered_data[filtered_data['country'] == country]
+            plt.plot(country_data['year'], country_data[y_col], 
+                    marker='o', label=country)
+        
+        plt.title(title, pad=20, fontsize=14)
+        plt.xlabel('Year', fontsize=12)
+        plt.ylabel(y_col.title(), fontsize=12)
+        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.grid(True, linestyle='--', alpha=0.7)
+        plt.tight_layout()
+        plt.show()
+        
+        self.log_operation(f"Created time series plot: {title} (Top {top_n} countries)")
 
 def main():
-    """Example usage of the data analysis tools."""
-    # Create analyzer instance
+    """Example usage."""
     analyzer = AdvancedDataAnalyzer()
     
-    # Fetch data from the specified CSV file
-    print("Fetching data from CSV file...")
+    print("Retrieving data from CSV file...")
     csv_file_path = "C:/Users/nicat/Desktop/Data/unsd-citypopulation-year-fm.csv.crdownload"
     analyzer.fetch_csv_data(csv_file_path)
     
     if analyzer.raw_data is not None:
         # Update column names
-        analyzer.raw_data.columns = ["Country", "Year", "Type", "Gender", "Location", "AreaType", "EstimateType", "FigureType", "NextYear", "Estimate", "Additional"]
+        analyzer.raw_data.columns = ["Country", "Year", "Type", "Gender", "Location", 
+                                   "AreaType", "EstimateType", "FigureType", "NextYear", 
+                                   "Estimate", "Additional"]
         
-        # Clean data
+        # Clenaing data
         analyzer.clean_data()
         
-        # Check available columns
-        print("Available columns:", list(analyzer.cleaned_data.columns))
+        # İmproved visualizations
+        analyzer.create_enhanced_bar_plot('country', 'estimate', 
+                                        'Top 10 Countries with the Highest Population', top_n=10)
         
-        # Create a bar plot
-        analyzer.create_bar_plot('country', 'estimate', 'Country vs Estimate')
+        analyzer.create_interactive_scatter_plot('year', 'estimate', 
+                                               'Population Distribution by Years', top_n=10)
         
-        # Create a heatmap
-        analyzer.create_heatmap(['Estimate', 'NextYear'], 'Correlation Heatmap')
+        analyzer.create_time_series_plot('estimate', 
+                                       'Time Series of the 5 Countries with the Highest Population', top_n=5)
         
-        # Create a scatter plot
-        analyzer.create_scatter_plot('year', 'estimate', 'Year vs Estimate')
-        
-        # Generate report
+      # Generate report
         analyzer.generate_pdf_report()
     else:
-        print("Failed to fetch data from CSV file.")
+        print("Unable to retrieve data from CSV file.")
 
 if __name__ == "__main__":
     main()
